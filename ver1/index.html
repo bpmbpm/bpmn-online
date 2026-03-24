@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BPMN Online — визуализатор диаграмм BPMN 2.0</title>
+
+  <!-- Библиотека bpmn-js для визуализации BPMN 2.0 -->
+  <script src="https://unpkg.com/bpmn-js@18.13.1/dist/bpmn-navigated-viewer.development.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.13.1/dist/assets/bpmn-js.css">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 8px;
+      background: #f5f5f5;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+
+    #layout {
+      display: flex;
+      gap: 8px;
+      height: calc(100vh - 80px);
+    }
+
+    #editor-panel {
+      display: flex;
+      flex-direction: column;
+      width: 380px;
+      min-width: 200px;
+      flex-shrink: 0;
+    }
+
+    #bpmn-editor {
+      flex: 1;
+      resize: none;
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    #controls {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #btn-render {
+      background: #4CAF50;
+      color: white;
+    }
+
+    #btn-render:hover {
+      background: #388E3C;
+    }
+
+    #btn-share {
+      background: #2196F3;
+      color: white;
+    }
+
+    #btn-share:hover {
+      background: #1565C0;
+    }
+
+    #btn-download {
+      background: #FF9800;
+      color: white;
+    }
+
+    #btn-download:hover {
+      background: #E65100;
+    }
+
+    #btn-file {
+      background: #9C27B0;
+      color: white;
+    }
+
+    #btn-file:hover {
+      background: #7B1FA2;
+    }
+
+    #error-msg {
+      color: #c00;
+      font-size: 12px;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    #share-hint {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      word-break: break-all;
+      max-height: 40px;
+      overflow: hidden;
+    }
+
+    #graph-panel {
+      flex: 1;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #graph-scroll {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+    }
+
+    #graph {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+    }
+
+    #zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-top: 1px solid #eee;
+      background: #fafafa;
+    }
+
+    #zoom-level {
+      font-size: 12px;
+      min-width: 45px;
+      text-align: center;
+    }
+
+    #file-input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>BPMN Online — визуализатор диаграмм BPMN 2.0</h1>
+
+  <div id="layout">
+    <div id="editor-panel">
+      <textarea id="bpmn-editor" placeholder="Введите XML код BPMN 2.0 здесь..."></textarea>
+
+      <div id="controls">
+        <button id="btn-render" onclick="otobrazit()">Отобразить</button>
+        <button id="btn-share" onclick="poluchit_ssylku()">Получить ссылку</button>
+        <button id="btn-download" onclick="skachat_svg()">Скачать SVG</button>
+        <button id="btn-file" onclick="otkryt_fail()">Открыть файл</button>
+        <input type="file" id="file-input" accept=".bpmn,.xml" onchange="zagruzit_fail(event)">
+      </div>
+
+      <div id="error-msg"></div>
+      <div id="share-hint"></div>
+    </div>
+
+    <div id="graph-panel">
+      <div id="graph-scroll">
+        <div id="graph"></div>
+      </div>
+      <div id="zoom-controls">
+        <button onclick="uvelichit()">+</button>
+        <button onclick="umenshit()">-</button>
+        <button onclick="sbrosit()">Сброс</button>
+        <button onclick="vpit_v_okno()">Вписать</button>
+        <span id="zoom-level">100%</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Экземпляр просмотрщика bpmn-js
+    let bpmnViewer = null;
+
+    // Текущий масштаб
+    let tekuschiyMasshtab = 1.0;
+
+    // Пример BPMN диаграммы по умолчанию
+    const primerBpmn = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_1" name="Задача 1">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_1">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_2" name="Задача 2">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_3" name="Задача 3">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="EndEvent_1">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_2">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Gateway_1" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Gateway_1" targetRef="Task_2" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Gateway_1" targetRef="Task_3" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_2" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_3" targetRef="EndEvent_2" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="180" y="160" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1">
+        <dc:Bounds x="280" y="138" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1_di" bpmnElement="Gateway_1" isMarkerVisible="true">
+        <dc:Bounds x="435" y="155" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2">
+        <dc:Bounds x="540" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3">
+        <dc:Bounds x="540" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="692" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_2_di" bpmnElement="EndEvent_2">
+        <dc:Bounds x="692" y="222" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="216" y="178" />
+        <di:waypoint x="280" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="380" y="178" />
+        <di:waypoint x="435" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="460" y="155" />
+        <di:waypoint x="460" y="120" />
+        <di:waypoint x="540" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <di:waypoint x="460" y="205" />
+        <di:waypoint x="460" y="240" />
+        <di:waypoint x="540" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <di:waypoint x="640" y="120" />
+        <di:waypoint x="692" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6">
+        <di:waypoint x="640" y="240" />
+        <di:waypoint x="692" y="240" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+    // Инициализация просмотрщика bpmn-js
+    function initBpmnViewer() {
+      if (!bpmnViewer) {
+        bpmnViewer = new BpmnJS({
+          container: '#graph',
+          keyboard: {
+            bindTo: document
+          }
+        });
+
+        // Подписываемся на события наведения на элементы
+        bpmnViewer.on('element.hover', function(event) {
+          highlightXml(event.element);
+        });
+
+        bpmnViewer.on('element.out', function(event) {
+          clearXmlHighlight();
+        });
+      }
+    }
+
+    // Получает BPMN код из URL
+    function poluchitBpmnIzUrl() {
+      // Проверяем хеш URL
+      if (window.location.hash && window.location.hash.length > 1) {
+        try {
+          // Убираем # в начале
+          var encoded = window.location.hash.substring(1);
+          // Декодируем URL
+          var decoded = decodeURIComponent(encoded);
+          return decoded;
+        } catch (e) {
+          console.error('Ошибка декодирования URL:', e);
+        }
+      }
+      // Возвращаем пример по умолчанию
+      return primerBpmn;
+    }
+
+    // Отображает BPMN диаграмму
+    async function otobrazit() {
+      initBpmnViewer();
+
+      var bpmnKod = document.getElementById('bpmn-editor').value;
+      var graphDiv = document.getElementById('graph');
+      var errorDiv = document.getElementById('error-msg');
+
+      errorDiv.textContent = '';
+
+      try {
+        await bpmnViewer.importXML(bpmnKod);
+
+        var canvas = bpmnViewer.get('canvas');
+        canvas.zoom('fit-viewport');
+
+        // После рендеринга привязываем обработчики наведения к SVG элементам
+        setTimeout(podklyuchitObrabotchikiNavedeniya, 100);
+
+      } catch (oshibka) {
+        // Извлекаем информацию об ошибке
+        var soobshenie = 'Ошибка: ' + oshibka.message;
+
+        // Пробуем найти номер строки
+        if (oshibka.errors && oshibka.errors.length > 0) {
+          var oshibkaParse = oshibka.errors[0];
+          if (oshibkaParse.line) {
+            soobshenie += ' (строка ' + oshibkaParse.line + ')';
+          }
+        }
+
+        errorDiv.textContent = soobshenie;
+        console.error('Ошибка импорта BPMN:', oshibka);
+      }
+    }
+
+    // Подключает обработчики наведения к SVG элементам диаграммы
+    function podklyuchitObrabotchikiNavedeniya() {
+      var svgElement = document.querySelector('#graph svg');
+      if (!svgElement) return;
+
+      // Находим все элементы диаграммы (G элементы с классом djs-element)
+      var elementy = svgElement.querySelectorAll('.djs-shape, .djs-connection');
+      elementy.forEach(function(element) {
+        element.style.cursor = 'pointer';
+
+        element.addEventListener('mouseenter', function() {
+          // При наведении подсвечиваем элемент
+          element.style.filter = 'brightness(1.2)';
+        });
+
+        element.addEventListener('mouseleave', function() {
+          // При уходе курсора убираем подсветку
+          element.style.filter = '';
+        });
+      });
+    }
+
+    // Подсвечивает соответствующий блок XML при наведении на фигуру
+    function highlightXml(element) {
+      // Это можно расширить для более точного сопоставления
+      console.log('Наведен на элемент:', element.type, element.id);
+    }
+
+    // Убирает подсветку XML
+    function clearXmlHighlight() {
+      console.log('Убрали наведение');
+    }
+
+    // Создаёт ссылку с текущим кодом BPMN
+    function poluchitSsylku() {
+      var bpmnKod = document.getElementById('bpmn-editor').value;
+      var encoded = encodeURIComponent(bpmnKod);
+      var base = window.location.origin + window.location.pathname;
+      var ssylka = base + '#' + encoded;
+
+      document.getElementById('share-hint').textContent = ssylka;
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(ssylka).then(function() {
+          document.getElementById('share-hint').textContent = 'Скопировано: ' + ssylka;
+        }).catch(function() {
+        });
+      }
+    }
+
+    // Скачивает текущий SVG
+    function skachatSvg() {
+      var svgElement = document.querySelector('#graph svg');
+      if (!svgElement) {
+        alert('Сначала отобразите диаграмму');
+        return;
+      }
+
+      var serializer = new XMLSerializer();
+      var svgStr = serializer.serializeToString(svgElement);
+
+      var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'diagram.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Открывает диалог выбора файла
+    function otkrytFail() {
+      document.getElementById('file-input').click();
+    }
+
+    // Загружает файл BPMN
+    function zagruzitFail(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('bpmn-editor').value = e.target.result;
+        // Автоматически отображаем после загрузки
+        otobrazit();
+      };
+      reader.readAsText(file);
+
+      // Сбрасываем input для повторной загрузки того же файла
+      event.target.value = '';
+    }
+
+    // Применяет текущий масштаб
+    function primenitMasshtab() {
+      var svgElement = document.querySelector('#graph svg');
+      if (!svgElement) return;
+
+      var viewBox = svgElement.viewBox.baseVal;
+      if (viewBox.width && viewBox.height) {
+        svgElement.style.width = (viewBox.width * tekuschiyMasshtab) + 'px';
+        svgElement.style.height = (viewBox.height * tekuschiyMasshtab) + 'px';
+      }
+
+      document.getElementById('zoom-level').textContent = Math.round(tekuschiyMasshtab * 100) + '%';
+    }
+
+    // Увеличивает масштаб
+    function uvelichit() {
+      tekuschiyMasshtab = Math.min(5.0, tekuschiyMasshtab + 0.1);
+      tekuschiyMasshtab = Math.round(tekuschiyMasshtab * 10) / 10;
+      primenitMasshtab();
+    }
+
+    // Уменьшает масштаб
+    function umenshit() {
+      tekuschiyMasshtab = Math.max(0.1, tekuschiyMasshtab - 0.1);
+      tekuschiyMasshtab = Math.round(tekuschiyMasshtab * 10) / 10;
+      primenitMasshtab();
+    }
+
+    // Сбрасывает масштаб
+    function sbrosit() {
+      tekuschiyMasshtab = 1.0;
+      primenitMasshtab();
+
+      // Также выполняем zoom to fit
+      if (bpmnViewer) {
+        var canvas = bpmnViewer.get('canvas');
+        canvas.zoom('fit-viewport');
+      }
+    }
+
+    // Вписывает в окно
+    function vpitVOkno() {
+      if (bpmnViewer) {
+        var canvas = bpmnViewer.get('canvas');
+        canvas.zoom('fit-viewport');
+        tekuschiyMasshtab = 1.0;
+        document.getElementById('zoom-level').textContent = '100%';
+      }
+    }
+
+    // Инициализация при загрузке страницы
+    function init() {
+      var bpmnKod = poluchitBpmnIzUrl();
+      document.getElementById('bpmn-editor').value = bpmnKod;
+
+      // Автоматически отображаем при загрузке
+      otobrazit();
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
