@@ -73,6 +73,15 @@
       background: #388E3C;
     }
 
+    #btn-clear {
+      background: #f44336;
+      color: white;
+    }
+
+    #btn-clear:hover {
+      background: #d32f2f;
+    }
+
     #btn-share {
       background: #2196F3;
       color: white;
@@ -168,10 +177,11 @@
 
       <div id="controls">
         <button id="btn-render" onclick="otobrazit()">Отобразить</button>
-        <button id="btn-share" onclick="poluchit_ssylku()">Получить ссылку</button>
-        <button id="btn-download" onclick="skachat_svg()">Скачать SVG</button>
-        <button id="btn-file" onclick="otkryt_fail()">Открыть файл</button>
-        <input type="file" id="file-input" accept=".bpmn,.xml" onchange="zagruzit_fail(event)">
+        <button id="btn-clear" onclick="ochistit()">Очистить</button>
+        <button id="btn-share" onclick="poluchitSsylku()">Получить ссылку</button>
+        <button id="btn-download" onclick="skachatSvg()">Скачать SVG</button>
+        <button id="btn-file" onclick="otkrytFail()">Открыть файл</button>
+        <input type="file" id="file-input" accept=".bpmn,.xml" onchange="zagruzitFail(event)">
       </div>
 
       <div id="error-msg"></div>
@@ -344,6 +354,9 @@
         var canvas = bpmnViewer.get('canvas');
         canvas.zoom('fit-viewport');
 
+        tekuschiyMasshtab = canvas.zoom();
+        document.getElementById('zoom-level').textContent = Math.round(tekuschiyMasshtab * 100) + '%';
+
         // После рендеринга привязываем обработчики наведения к SVG элементам
         setTimeout(podklyuchitObrabotchikiNavedeniya, 100);
 
@@ -362,6 +375,20 @@
         errorDiv.textContent = soobshenie;
         console.error('Ошибка импорта BPMN:', oshibka);
       }
+    }
+
+    // Очищает редактор и диаграмму
+    function ochistit() {
+      document.getElementById('bpmn-editor').value = '';
+      document.getElementById('error-msg').textContent = '';
+      document.getElementById('share-hint').textContent = '';
+
+      if (bpmnViewer) {
+        bpmnViewer.get('canvas').clear();
+      }
+
+      tekuschiyMasshtab = 1.0;
+      document.getElementById('zoom-level').textContent = '100%';
     }
 
     // Подключает обработчики наведения к SVG элементам диаграммы
@@ -460,28 +487,32 @@
 
     // Применяет текущий масштаб
     function primenitMasshtab() {
-      var svgElement = document.querySelector('#graph svg');
-      if (!svgElement) return;
+      if (!bpmnViewer) return;
 
-      var viewBox = svgElement.viewBox.baseVal;
-      if (viewBox.width && viewBox.height) {
-        svgElement.style.width = (viewBox.width * tekuschiyMasshtab) + 'px';
-        svgElement.style.height = (viewBox.height * tekuschiyMasshtab) + 'px';
-      }
+      var canvas = bpmnViewer.get('canvas');
+      canvas.zoom(tekuschiyMasshtab);
 
       document.getElementById('zoom-level').textContent = Math.round(tekuschiyMasshtab * 100) + '%';
     }
 
     // Увеличивает масштаб
     function uvelichit() {
-      tekuschiyMasshtab = Math.min(5.0, tekuschiyMasshtab + 0.1);
+      if (!bpmnViewer) return;
+
+      var canvas = bpmnViewer.get('canvas');
+      var currentZoom = canvas.zoom();
+      tekuschiyMasshtab = Math.min(5.0, currentZoom + 0.1);
       tekuschiyMasshtab = Math.round(tekuschiyMasshtab * 10) / 10;
       primenitMasshtab();
     }
 
     // Уменьшает масштаб
     function umenshit() {
-      tekuschiyMasshtab = Math.max(0.1, tekuschiyMasshtab - 0.1);
+      if (!bpmnViewer) return;
+
+      var canvas = bpmnViewer.get('canvas');
+      var currentZoom = canvas.zoom();
+      tekuschiyMasshtab = Math.max(0.1, currentZoom - 0.1);
       tekuschiyMasshtab = Math.round(tekuschiyMasshtab * 10) / 10;
       primenitMasshtab();
     }
@@ -489,13 +520,14 @@
     // Сбрасывает масштаб
     function sbrosit() {
       tekuschiyMasshtab = 1.0;
-      primenitMasshtab();
 
-      // Также выполняем zoom to fit
       if (bpmnViewer) {
         var canvas = bpmnViewer.get('canvas');
         canvas.zoom('fit-viewport');
+        tekuschiyMasshtab = canvas.zoom();
       }
+
+      document.getElementById('zoom-level').textContent = Math.round(tekuschiyMasshtab * 100) + '%';
     }
 
     // Вписывает в окно
@@ -503,8 +535,8 @@
       if (bpmnViewer) {
         var canvas = bpmnViewer.get('canvas');
         canvas.zoom('fit-viewport');
-        tekuschiyMasshtab = 1.0;
-        document.getElementById('zoom-level').textContent = '100%';
+        tekuschiyMasshtab = canvas.zoom();
+        document.getElementById('zoom-level').textContent = Math.round(tekuschiyMasshtab * 100) + '%';
       }
     }
 
