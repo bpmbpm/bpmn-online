@@ -3,4 +3,6 @@
 ### run
 - https://bpmbpm.github.io/bpmn-online/ver1
 
-Использовалась: MiniMax M2.5 Free (opencode/minimax-m2.5-free)
+Использовались: 
+- MiniMax M2.5 Free (opencode/minimax-m2.5-free)
+- https://github.com/link-assistant/hive-mind
